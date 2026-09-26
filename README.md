@@ -37,6 +37,9 @@ A RAG (Retrieval Augmented Generation) chatbot that lets you upload any PDF and 
 ```
 
 4. Add your API keys in a `.env` file
+```bash
+GROQ_API_KEY=your_groq_key_here
+```
 
 5. Run the app
 ```bash

@@ -16,7 +16,7 @@ from langchain_core.output_parsers import StrOutputParser
 app = Flask(__name__)
 
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-llm = ChatGroq(model="llama-3.1-8b-instant", api_key=os.getenv("GROQ_API_KEY"))
+llm = ChatGroq(model="openai/gpt-oss-20b", api_key=os.getenv("GROQ_API_KEY"))
 
 prompt = ChatPromptTemplate.from_template("""
 Answer the question based only on the context below.
