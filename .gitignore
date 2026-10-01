@@ -5,3 +5,7 @@ chroma_db/
 chroma_dbs/
 uploads/
 *.pyc
+.venv-1/
+.venv-2/
+.venv-3/
+.venv-4/
