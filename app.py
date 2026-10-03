@@ -2,11 +2,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
-import shutil
 from flask import Flask, request, jsonify, render_template
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
@@ -19,6 +18,7 @@ embeddings = HuggingFaceEndpointEmbeddings(
     model="sentence-transformers/all-MiniLM-L6-v2",
     huggingfacehub_api_token=os.getenv("HF_TOKEN")
 )
+
 llm = ChatGroq(model="openai/gpt-oss-20b", api_key=os.getenv("GROQ_API_KEY"))
 
 prompt = ChatPromptTemplate.from_template("""
@@ -37,8 +37,8 @@ def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
 chains = {}
-vectorstores={}
-chat_histories={}
+vectorstores = {}
+chat_histories = {}
 
 @app.route("/")
 def index():
@@ -55,10 +55,8 @@ def upload():
 
     pdf_id = file.filename.replace(".pdf", "").replace(" ", "_")
     pdf_path = f"./uploads/{pdf_id}.pdf"
-    db_path = f"./chroma_dbs/{pdf_id}"
 
     os.makedirs("./uploads", exist_ok=True)
-    os.makedirs("./chroma_dbs", exist_ok=True)
     file.save(pdf_path)
 
     loader = PyPDFLoader(pdf_path)
@@ -66,10 +64,9 @@ def upload():
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = splitter.split_documents(pages)
 
-    vectorstore = Chroma.from_documents(
+    vectorstore = FAISS.from_documents(
         documents=chunks,
-        embedding=embeddings,
-        persist_directory=db_path
+        embedding=embeddings
     )
 
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
@@ -98,18 +95,15 @@ def ask():
     if pdf_id not in chains:
         return jsonify({"error": "PDF not found, please upload first"}), 404
 
-    # Get source documents
     retriever = vectorstores[pdf_id].as_retriever(search_kwargs={"k": 3})
     docs = retriever.invoke(question)
 
-    # Format chat history
     history = chat_histories[pdf_id]
     history_text = "\n".join([
         f"Human: {h['question']}\nAssistant: {h['answer']}"
-        for h in history[-3:]  # last 3 exchanges only
+        for h in history[-3:]
     ])
 
-    # Build chain with history
     chain = (
         {
             "context": retriever | format_docs,
@@ -123,13 +117,11 @@ def ask():
 
     result = chain.invoke(question)
 
-    # Save to history
     chat_histories[pdf_id].append({
         "question": question,
         "answer": result
     })
 
-    # Extract page numbers
     pages = list(set([
         doc.metadata.get("page", "unknown") + 1
         for doc in docs
@@ -138,6 +130,7 @@ def ask():
     source = f"Page {', '.join(str(p) for p in pages)}"
 
     return jsonify({"answer": result, "source": source})
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
